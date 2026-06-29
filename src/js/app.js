@@ -1,8 +1,23 @@
-// ── STATE ──
-let currentUser = JSON.parse(localStorage.getItem('tf_user') || 'null');
+const CLERK_KEY = 'pk_test_ZW5nYWdlZC1ncmFja2xlLTkuY2xlcmsuYWNjb3VudHMuZGV2JA';
+
+let clerk = null;
 let activeFilter = 'All';
 let selectedPlan = 'grove';
-let signupStep = 1;
+let pendingPaymentOpen = false; // set true when unauthenticated user tries to join
+
+// ── PER-USER DATA (localStorage, keyed by Clerk user id) ──
+function userKey(suffix) {
+  return `tf_${clerk?.user?.id}_${suffix}`;
+}
+function getUserData() {
+  if (!clerk?.user) return null;
+  const stored = localStorage.getItem(userKey('data'));
+  return stored ? JSON.parse(stored) : { plan: null, trees: 0, userCodes: [] };
+}
+function saveUserData(data) {
+  if (!clerk?.user) return;
+  localStorage.setItem(userKey('data'), JSON.stringify(data));
+}
 
 // ── UTILS ──
 function randItem(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -24,11 +39,18 @@ function closeModal(id) {
   document.body.style.overflow = '';
 }
 
+// ── PAYMENT MODAL STEPS ──
+function goToPayStep(step) {
+  document.querySelectorAll('.pay-step').forEach(el => el.classList.add('hidden'));
+  document.getElementById(`pay-step-${step}`).classList.remove('hidden');
+}
+
 // ── STATS ──
 function updateStats() {
-  const totalMembers = DEMO_MEMBERS.length + (currentUser ? 1 : 0);
-  const totalTrees = DEMO_MEMBERS.reduce((s, m) => s + m.trees, 0) + (currentUser ? (currentUser.trees || 1) : 0);
-  const totalCodes = SERVICES.reduce((s, svc) => s + svc.codes.length, 0) + (currentUser?.userCodes?.length || 0);
+  const userData = getUserData();
+  const totalMembers = DEMO_MEMBERS.length + (clerk?.user && userData?.plan ? 1 : 0);
+  const totalTrees = DEMO_MEMBERS.reduce((s, m) => s + m.trees, 0) + (userData?.trees || 0);
+  const totalCodes = SERVICES.reduce((s, svc) => s + svc.codes.length, 0);
 
   document.getElementById('stat-members').textContent = totalMembers.toLocaleString();
   document.getElementById('stat-trees').textContent = totalTrees.toLocaleString();
@@ -38,15 +60,18 @@ function updateStats() {
 
 // ── REFERRAL CARDS ──
 function buildCard(svc) {
+  const userData = getUserData();
   let codes = [...svc.codes];
-  // Add user's code if they have one for this service
-  if (currentUser?.userCodes) {
-    const uc = currentUser.userCodes.find(c => c.serviceId === svc.id);
-    if (uc) codes.push({ code: uc.code, contributor: currentUser.name + " (you)", trees: currentUser.trees || 1 });
+
+  if (userData?.userCodes) {
+    const uc = userData.userCodes.find(c => c.serviceId === svc.id);
+    if (uc) {
+      const displayName = clerk.user.firstName || clerk.user.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'You';
+      codes.push({ code: uc.code, contributor: displayName + ' (you)', trees: userData.trees || 1 });
+    }
   }
 
   if (codes.length === 0) {
-    // No codes yet — show placeholder
     return `
       <div class="referral-card" data-category="${svc.category}">
         <div class="card-header">
@@ -107,23 +132,20 @@ function renderGrid() {
 
 // ── COPY ──
 function copyCode(btn, code) {
-  navigator.clipboard.writeText(code).then(() => {
+  const finish = () => {
     btn.textContent = '✓ Copied';
     btn.classList.add('copied');
     showToast('Code copied to clipboard 🌳');
     setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
-  }).catch(() => {
-    // Fallback
+  };
+  navigator.clipboard?.writeText(code).then(finish).catch(() => {
     const el = document.createElement('textarea');
     el.value = code;
     document.body.appendChild(el);
     el.select();
     document.execCommand('copy');
     document.body.removeChild(el);
-    btn.textContent = '✓ Copied';
-    btn.classList.add('copied');
-    showToast('Code copied! 🌳');
-    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    finish();
   });
 }
 
@@ -142,36 +164,55 @@ function setFilter(cat, btn) {
   renderGrid();
 }
 
-// ── NAV / AUTH ──
+// ── NAV ──
 function updateNav() {
-  const authButtons = document.getElementById('nav-auth');
+  const authEl = document.getElementById('nav-auth');
   const dashLink = document.getElementById('nav-dashboard');
-  if (currentUser) {
-    authButtons.innerHTML = `
-      <span style="color:var(--green-400);font-size:.85rem">🌳 ${currentUser.trees || 0} trees</span>
-      <button class="btn btn-outline btn-sm" onclick="logout()">Sign out</button>
+  const user = clerk?.user;
+
+  if (user) {
+    const userData = getUserData();
+    const name = user.firstName || user.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'Member';
+    authEl.innerHTML = `
+      <span style="color:var(--green-400);font-size:.85rem">🌳 ${userData?.trees || 0} trees</span>
+      <span style="color:var(--green-100);font-size:.85rem;font-weight:600">${name}</span>
+      <button class="btn btn-outline btn-sm" onclick="clerk.signOut()">Sign out</button>
     `;
     dashLink.style.display = 'block';
   } else {
-    authButtons.innerHTML = `
-      <a href="#" class="nav-links" onclick="openModal('login-modal')">Sign in</a>
-      <button class="btn btn-primary btn-sm" onclick="openModal('signup-modal')">Join for free</button>
+    authEl.innerHTML = `
+      <button class="btn btn-outline btn-sm" onclick="clerk.openSignIn()">Sign in</button>
+      <button class="btn btn-primary btn-sm" onclick="startJoin()">Join for free</button>
     `;
     dashLink.style.display = 'none';
   }
 }
 
-function logout() {
-  currentUser = null;
-  localStorage.removeItem('tf_user');
-  updateNav();
-  updateStats();
-  renderGrid();
-  showDashboard(false);
-  showToast('Signed out. See you soon! 👋');
+// ── JOIN FLOW ──
+// Called from hero CTA and pricing buttons.
+// If not signed in → Clerk sign-up → on auth, open payment modal.
+// If already signed in → open payment modal directly.
+function startJoin(planId) {
+  if (planId) selectedPlan = planId;
+  if (!clerk?.user) {
+    pendingPaymentOpen = true;
+    clerk.openSignUp();
+  } else {
+    openPaymentModal();
+  }
 }
 
-// ── SIGNUP FLOW ──
+function openSignupWithPlan(planId) {
+  startJoin(planId);
+}
+
+function openPaymentModal() {
+  initPlanSelector();
+  goToPayStep(1);
+  openModal('payment-modal');
+}
+
+// ── PLAN SELECTOR ──
 function initPlanSelector() {
   const grid = document.getElementById('plan-select-grid');
   grid.innerHTML = PLANS.map(p => `
@@ -182,6 +223,8 @@ function initPlanSelector() {
       <div class="po-trees">🌳 ${p.trees} trees</div>
     </div>
   `).join('');
+  const plan = PLANS.find(p => p.id === selectedPlan);
+  document.getElementById('pay-btn').textContent = `Complete & Start Planting — $${plan.price}/mo`;
 }
 
 function selectPlan(id, el) {
@@ -189,100 +232,47 @@ function selectPlan(id, el) {
   document.querySelectorAll('.plan-option').forEach(e => e.classList.remove('selected'));
   el.classList.add('selected');
   const plan = PLANS.find(p => p.id === id);
-  document.getElementById('signup-submit-btn').textContent = `Start planting — $${plan.price}/mo`;
+  document.getElementById('pay-btn').textContent = `Complete & Start Planting — $${plan.price}/mo`;
 }
 
-function goToStep(step) {
-  signupStep = step;
-  document.querySelectorAll('.signup-step').forEach(el => el.classList.add('hidden'));
-  document.getElementById(`signup-step-${step}`).classList.remove('hidden');
-}
-
-function handleSignup(e) {
-  e.preventDefault();
-  const name = document.getElementById('signup-name').value.trim();
-  const email = document.getElementById('signup-email').value.trim();
-  const password = document.getElementById('signup-password').value;
-
-  if (!name || !email || !password) { showToast('Please fill in all fields'); return; }
-
-  goToStep(2);
-}
-
+// ── PAYMENT ──
 function handlePayment(e) {
   e.preventDefault();
   const plan = PLANS.find(p => p.id === selectedPlan);
-
-  // Simulate payment processing
   const btn = document.getElementById('pay-btn');
-  btn.textContent = 'Processing...';
+  btn.textContent = 'Processing…';
   btn.disabled = true;
 
   setTimeout(() => {
-    const name = document.getElementById('signup-name').value.trim();
-    currentUser = {
-      name,
-      plan: plan.id,
-      trees: plan.trees,
-      joined: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-      userCodes: []
-    };
-    localStorage.setItem('tf_user', JSON.stringify(currentUser));
+    const userData = getUserData() || { userCodes: [] };
+    userData.plan = plan.id;
+    userData.trees = (userData.trees || 0) + plan.trees;
+    saveUserData(userData);
 
-    goToStep(3); // success
+    goToPayStep(2);
     updateNav();
     updateStats();
-    renderGrid();
-    btn.textContent = 'Complete & Start Planting';
+    btn.textContent = `Complete & Start Planting — $${plan.price}/mo`;
     btn.disabled = false;
-  }, 1800);
+  }, 1500);
 }
 
-// ── LOGIN ──
-function handleLogin(e) {
-  e.preventDefault();
-  const email = document.getElementById('login-email').value.trim();
-  if (!email) { showToast('Enter your email'); return; }
-
-  // Demo: any email works
-  const btn = document.getElementById('login-btn');
-  btn.textContent = 'Signing in...';
-  btn.disabled = true;
-
-  setTimeout(() => {
-    currentUser = {
-      name: email.split('@')[0],
-      plan: 'grove',
-      trees: 3,
-      joined: 'Jan 2024',
-      userCodes: []
-    };
-    localStorage.setItem('tf_user', JSON.stringify(currentUser));
-    closeModal('login-modal');
-    updateNav();
-    updateStats();
-    renderGrid();
-    showToast('Welcome back! 🌳');
-    btn.textContent = 'Sign in';
-    btn.disabled = false;
-  }, 1000);
-}
-
-// ── ADD CODE ──
+// ── ADD CODE (from card) ──
 let addCodeTargetService = null;
 
 function openAddCodeModal(serviceId) {
-  if (!currentUser) {
-    openModal('signup-modal');
-    showToast('Sign up first to add your referral code!');
+  if (!clerk?.user) {
+    pendingPaymentOpen = false;
+    clerk.openSignIn();
+    showToast('Sign in first to add your referral code!');
     return;
   }
   addCodeTargetService = serviceId;
   const svc = SERVICES.find(s => s.id === serviceId);
   document.getElementById('add-code-service-name').textContent = svc.name;
 
-  // Pre-fill if user already has a code
-  const existing = currentUser.userCodes?.find(c => c.serviceId === serviceId);
+  const userData = getUserData();
+  const existing = userData?.userCodes?.find(c => c.serviceId === serviceId);
   document.getElementById('add-code-input').value = existing?.code || '';
   document.getElementById('add-code-url').value = existing?.url || svc.url;
 
@@ -294,30 +284,29 @@ function handleAddCode(e) {
   const code = document.getElementById('add-code-input').value.trim().toUpperCase();
   if (!code) { showToast('Enter a referral code'); return; }
 
-  if (!currentUser.userCodes) currentUser.userCodes = [];
+  const userData = getUserData() || { userCodes: [] };
+  if (!userData.userCodes) userData.userCodes = [];
 
-  // Update or insert
-  const idx = currentUser.userCodes.findIndex(c => c.serviceId === addCodeTargetService);
+  const idx = userData.userCodes.findIndex(c => c.serviceId === addCodeTargetService);
   if (idx >= 0) {
-    currentUser.userCodes[idx].code = code;
+    userData.userCodes[idx].code = code;
   } else {
-    currentUser.userCodes.push({ serviceId: addCodeTargetService, code });
+    userData.userCodes.push({ serviceId: addCodeTargetService, code });
   }
-  localStorage.setItem('tf_user', JSON.stringify(currentUser));
+  saveUserData(userData);
 
-  // Also push into SERVICES so it shows immediately
+  // Reflect in live SERVICES array
+  const displayName = clerk.user.firstName || clerk.user.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'You';
   const svc = SERVICES.find(s => s.id === addCodeTargetService);
-  const existingInSvc = svc.codes.find(c => c.contributor === currentUser.name + ' (you)');
-  if (!existingInSvc) {
-    svc.codes.push({ code, contributor: currentUser.name + ' (you)', trees: currentUser.trees || 1 });
-  } else {
-    existingInSvc.code = code;
-  }
+  const existingInSvc = svc.codes.findIndex(c => c.contributor?.endsWith('(you)'));
+  const entry = { code, contributor: displayName + ' (you)', trees: userData.trees || 1 };
+  if (existingInSvc >= 0) svc.codes[existingInSvc] = entry;
+  else svc.codes.push(entry);
 
   closeModal('add-code-modal');
   renderGrid();
   renderDashboardCodes();
-  showToast('Referral code saved — it\'s now live! 🎉');
+  showToast('Code saved — it\'s now live! 🎉');
 }
 
 // ── DASHBOARD ──
@@ -328,18 +317,17 @@ function showDashboard(show) {
 }
 
 function renderDashboard() {
-  if (!currentUser) return;
-  const plan = PLANS.find(p => p.id === currentUser.plan) || PLANS[0];
+  if (!clerk?.user) return;
+  const userData = getUserData() || { plan: null, trees: 0, userCodes: [] };
+  const plan = PLANS.find(p => p.id === userData.plan) || PLANS[0];
+  const name = clerk.user.firstName || clerk.user.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'Member';
 
-  document.getElementById('dash-name').textContent = currentUser.name;
+  document.getElementById('dash-name').textContent = name + '\'s Dashboard';
   document.getElementById('dash-plan').textContent = plan.name;
-  document.getElementById('dash-trees-val').textContent = currentUser.trees || 0;
-  document.getElementById('dash-codes-val').textContent = currentUser.userCodes?.length || 0;
+  document.getElementById('dash-trees-val').textContent = userData.trees || 0;
+  document.getElementById('dash-codes-val').textContent = userData.userCodes?.length || 0;
   document.getElementById('dash-plan-val').textContent = `$${plan.price}/mo`;
-
-  // Total trees across all services this month
-  const totalViews = (currentUser.userCodes?.length || 0) * 847;
-  document.getElementById('dash-views-val').textContent = totalViews.toLocaleString();
+  document.getElementById('dash-views-val').textContent = ((userData.userCodes?.length || 0) * 847).toLocaleString();
 
   renderDashboardCodes();
   renderServiceSelect();
@@ -347,7 +335,8 @@ function renderDashboard() {
 
 function renderDashboardCodes() {
   const tbody = document.getElementById('codes-tbody');
-  const codes = currentUser?.userCodes || [];
+  const userData = getUserData();
+  const codes = userData?.userCodes || [];
 
   if (codes.length === 0) {
     tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--earth-400);padding:2rem">
@@ -374,7 +363,8 @@ function renderDashboardCodes() {
 
 function renderServiceSelect() {
   const sel = document.getElementById('add-code-service-select');
-  const userCodeIds = new Set(currentUser?.userCodes?.map(c => c.serviceId) || []);
+  const userData = getUserData();
+  const userCodeIds = new Set(userData?.userCodes?.map(c => c.serviceId) || []);
   sel.innerHTML = `<option value="">Choose a service…</option>` +
     SERVICES.map(s => `<option value="${s.id}" ${userCodeIds.has(s.id) ? 'disabled' : ''}>
       ${s.icon} ${s.name} ${userCodeIds.has(s.id) ? '(code added)' : ''}
@@ -382,12 +372,12 @@ function renderServiceSelect() {
 }
 
 function removeCode(serviceId) {
-  currentUser.userCodes = currentUser.userCodes.filter(c => c.serviceId !== serviceId);
-  localStorage.setItem('tf_user', JSON.stringify(currentUser));
+  const userData = getUserData();
+  userData.userCodes = userData.userCodes.filter(c => c.serviceId !== serviceId);
+  saveUserData(userData);
 
-  // Remove from services array too
   const svc = SERVICES.find(s => s.id === serviceId);
-  if (svc) svc.codes = svc.codes.filter(c => !c.contributor.endsWith('(you)'));
+  if (svc) svc.codes = svc.codes.filter(c => !c.contributor?.endsWith('(you)'));
 
   renderDashboardCodes();
   renderServiceSelect();
@@ -401,12 +391,14 @@ function handleDashAddCode(e) {
   const code = document.getElementById('add-code-direct').value.trim().toUpperCase();
   if (!serviceId || !code) { showToast('Select a service and enter your code'); return; }
 
-  if (!currentUser.userCodes) currentUser.userCodes = [];
-  currentUser.userCodes.push({ serviceId, code });
-  localStorage.setItem('tf_user', JSON.stringify(currentUser));
+  const userData = getUserData() || { userCodes: [] };
+  if (!userData.userCodes) userData.userCodes = [];
+  userData.userCodes.push({ serviceId, code });
+  saveUserData(userData);
 
+  const displayName = clerk.user.firstName || clerk.user.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'You';
   const svc = SERVICES.find(s => s.id === serviceId);
-  svc.codes.push({ code, contributor: currentUser.name + ' (you)', trees: currentUser.trees || 1 });
+  svc.codes.push({ code, contributor: displayName + ' (you)', trees: userData.trees || 1 });
 
   document.getElementById('add-code-direct').value = '';
   document.getElementById('add-code-service-select').value = '';
@@ -417,35 +409,52 @@ function handleDashAddCode(e) {
 }
 
 // ── INIT ──
-document.addEventListener('DOMContentLoaded', () => {
+async function init() {
+  clerk = new window.Clerk(CLERK_KEY);
+  await clerk.load();
+
+  // React to auth state changes (sign in, sign out, sign up)
+  clerk.addListener(({ user }) => {
+    updateNav();
+    updateStats();
+    renderGrid();
+
+    if (user && pendingPaymentOpen) {
+      pendingPaymentOpen = false;
+      // Small delay so Clerk's modal closes first
+      setTimeout(openPaymentModal, 300);
+    }
+
+    // If user signed out while on dashboard, return to main page
+    if (!user) showDashboard(false);
+  });
+
   buildFilters();
   renderGrid();
   updateStats();
   updateNav();
-  initPlanSelector();
 
-  // Close modals on overlay click
+  // Close modals on overlay click / Escape
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', e => {
       if (e.target === overlay) {
         closeModal(overlay.id);
-        if (overlay.id === 'signup-modal') goToStep(1);
+        if (overlay.id === 'payment-modal') goToPayStep(1);
       }
     });
   });
 
-  // Keyboard escape
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       document.querySelectorAll('.modal-overlay.open').forEach(m => {
         closeModal(m.id);
-        if (m.id === 'signup-modal') goToStep(1);
+        if (m.id === 'payment-modal') goToPayStep(1);
       });
     }
   });
 
-  // Rotate codes every 30 seconds
-  setInterval(() => {
-    renderGrid();
-  }, 30000);
-});
+  // Rotate displayed codes every 30 seconds
+  setInterval(renderGrid, 30000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
