@@ -3,7 +3,60 @@ const CLERK_KEY = 'pk_test_ZW5nYWdlZC1ncmFja2xlLTkuY2xlcmsuYWNjb3VudHMuZGV2JA';
 let clerk = null;
 let activeFilter = 'All';
 let selectedPlan = 'grove';
-let pendingPaymentOpen = false; // set true when unauthenticated user tries to join
+let pendingPaymentOpen = false;
+
+// ── DOMAIN / LOGO HELPERS ──
+function extractDomain(input) {
+  input = input.trim().toLowerCase();
+  if (!input) return '';
+  try {
+    // Handle bare domains like "netflix.com" by prepending https://
+    const url = new URL(input.startsWith('http') ? input : 'https://' + input);
+    return url.hostname.replace(/^www\./, '');
+  } catch {
+    // Not a valid URL — treat as bare domain, strip www
+    return input.replace(/^www\./, '').split('/')[0];
+  }
+}
+
+function nameFromDomain(domain) {
+  // "netflix.com" → "Netflix", "joinhoney.com" → "Joinhoney"
+  const base = domain.split('.')[0];
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
+let logoPreviewTimer = null;
+function previewLogo(rawInput, imgId = 'domain-logo-img', previewId = 'domain-logo-preview', nameId = 'domain-detected-name') {
+  clearTimeout(logoPreviewTimer);
+  const domain = extractDomain(rawInput);
+  const preview = document.getElementById(previewId);
+  const nameEl = document.getElementById(nameId);
+
+  if (!domain || !domain.includes('.')) {
+    if (preview) preview.style.display = 'none';
+    if (nameEl) nameEl.textContent = '';
+    return;
+  }
+
+  logoPreviewTimer = setTimeout(() => {
+    const img = document.getElementById(imgId);
+    if (!img) return;
+    img.src = logoUrl(domain);
+    img.onload = () => { if (preview) preview.style.display = 'block'; };
+    img.onerror = () => { if (preview) preview.style.display = 'none'; };
+    if (nameEl) nameEl.textContent = '✓ ' + nameFromDomain(domain);
+  }, 350);
+}
+
+function previewModalLogo(rawInput) {
+  const domain = extractDomain(rawInput);
+  previewLogo(rawInput, 'modal-logo-img', 'modal-logo-preview', null);
+  // Auto-fill service name if field is empty
+  const nameInput = document.getElementById('modal-service-name');
+  if (nameInput && !nameInput.dataset.userEdited && domain && domain.includes('.')) {
+    nameInput.value = nameFromDomain(domain);
+  }
+}
 
 // ── PER-USER DATA (localStorage, keyed by Clerk user id) ──
 function userKey(suffix) {
@@ -261,9 +314,7 @@ function handlePayment(e) {
   }, 1500);
 }
 
-// ── ADD CODE (from card) ──
-let addCodeTargetService = null;
-
+// ── ADD CODE MODAL (free-form) ──
 function openAddCodeModal(serviceId) {
   if (!clerk?.user) {
     pendingPaymentOpen = false;
@@ -271,45 +322,47 @@ function openAddCodeModal(serviceId) {
     showToast('Sign in first to add your referral code!');
     return;
   }
-  addCodeTargetService = serviceId;
-  const svc = SERVICES.find(s => s.id === serviceId);
-  document.getElementById('add-code-service-name').textContent = svc.name;
 
-  const userData = getUserData();
-  const existing = userData?.userCodes?.find(c => c.serviceId === serviceId);
-  document.getElementById('add-code-input').value = existing?.code || '';
-  document.getElementById('add-code-url').value = existing?.url || svc.url;
+  // Pre-fill domain + name if opening from a known service card
+  const svc = serviceId ? SERVICES.find(s => s.id === serviceId) : null;
+  const domainInput = document.getElementById('modal-domain-input');
+  const nameInput = document.getElementById('modal-service-name');
+  const codeInput = document.getElementById('add-code-input');
+  const rewardInput = document.getElementById('modal-reward');
+
+  if (svc) {
+    domainInput.value = svc.domain || '';
+    nameInput.value = svc.name;
+    nameInput.dataset.userEdited = '1';
+    rewardInput.value = svc.reward || '';
+    previewLogo(svc.domain || '', 'modal-logo-img', 'modal-logo-preview', null);
+    const userData = getUserData();
+    const existing = userData?.userCodes?.find(c => c.serviceId === serviceId);
+    codeInput.value = existing?.code || '';
+  } else {
+    domainInput.value = '';
+    nameInput.value = '';
+    nameInput.dataset.userEdited = '';
+    rewardInput.value = '';
+    codeInput.value = '';
+    document.getElementById('modal-logo-preview').style.display = 'none';
+  }
 
   openModal('add-code-modal');
 }
 
 function handleAddCode(e) {
   e.preventDefault();
+  const rawDomain = document.getElementById('modal-domain-input').value.trim();
+  const domain = extractDomain(rawDomain);
+  const name = document.getElementById('modal-service-name').value.trim();
   const code = document.getElementById('add-code-input').value.trim().toUpperCase();
-  if (!code) { showToast('Enter a referral code'); return; }
+  const reward = document.getElementById('modal-reward').value.trim();
 
-  const userData = getUserData() || { userCodes: [] };
-  if (!userData.userCodes) userData.userCodes = [];
+  if (!domain || !name || !code) { showToast('Please fill in the website, name, and code'); return; }
 
-  const idx = userData.userCodes.findIndex(c => c.serviceId === addCodeTargetService);
-  if (idx >= 0) {
-    userData.userCodes[idx].code = code;
-  } else {
-    userData.userCodes.push({ serviceId: addCodeTargetService, code });
-  }
-  saveUserData(userData);
-
-  // Reflect in live SERVICES array
-  const displayName = clerk.user.firstName || clerk.user.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'You';
-  const svc = SERVICES.find(s => s.id === addCodeTargetService);
-  const existingInSvc = svc.codes.findIndex(c => c.contributor?.endsWith('(you)'));
-  const entry = { code, contributor: displayName + ' (you)', trees: userData.trees || 1 };
-  if (existingInSvc >= 0) svc.codes[existingInSvc] = entry;
-  else svc.codes.push(entry);
-
+  addCodeForService({ domain, name, code, reward });
   closeModal('add-code-modal');
-  renderGrid();
-  renderDashboardCodes();
   showToast('Code saved — it\'s now live! 🎉');
 }
 
@@ -334,7 +387,6 @@ function renderDashboard() {
   document.getElementById('dash-views-val').textContent = ((userData.userCodes?.length || 0) * 847).toLocaleString();
 
   renderDashboardCodes();
-  renderServiceSelect();
 }
 
 function renderDashboardCodes() {
@@ -365,15 +417,6 @@ function renderDashboardCodes() {
   }).join('');
 }
 
-function renderServiceSelect() {
-  const sel = document.getElementById('add-code-service-select');
-  const userData = getUserData();
-  const userCodeIds = new Set(userData?.userCodes?.map(c => c.serviceId) || []);
-  sel.innerHTML = `<option value="">Choose a service…</option>` +
-    SERVICES.map(s => `<option value="${s.id}" ${userCodeIds.has(s.id) ? 'disabled' : ''}>
-      ${s.icon} ${s.name} ${userCodeIds.has(s.id) ? '(code added)' : ''}
-    </option>`).join('');
-}
 
 function removeCode(serviceId) {
   const userData = getUserData();
@@ -384,32 +427,75 @@ function removeCode(serviceId) {
   if (svc) svc.codes = svc.codes.filter(c => !c.contributor?.endsWith('(you)'));
 
   renderDashboardCodes();
-  renderServiceSelect();
   renderGrid();
   showToast('Code removed');
 }
 
 function handleDashAddCode(e) {
   e.preventDefault();
-  const serviceId = document.getElementById('add-code-service-select').value;
+  const rawDomain = document.getElementById('add-code-domain-input').value.trim();
+  const domain = extractDomain(rawDomain);
   const code = document.getElementById('add-code-direct').value.trim().toUpperCase();
-  if (!serviceId || !code) { showToast('Select a service and enter your code'); return; }
 
+  if (!domain || !code) { showToast('Enter a website and a referral code'); return; }
+
+  // Derive name from domain; could be refined later
+  const name = nameFromDomain(domain);
+  addCodeForService({ domain, name, code, reward: '' });
+
+  document.getElementById('add-code-domain-input').value = '';
+  document.getElementById('add-code-direct').value = '';
+  document.getElementById('domain-logo-preview').style.display = 'none';
+  document.getElementById('domain-detected-name').textContent = '';
+  showToast('Code added and live! 🎉');
+}
+
+// ── SHARED: find-or-create service and attach code ──
+function addCodeForService({ domain, name, code, reward }) {
+  const displayName = clerk.user.firstName || clerk.user.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'You';
   const userData = getUserData() || { userCodes: [] };
   if (!userData.userCodes) userData.userCodes = [];
-  userData.userCodes.push({ serviceId, code });
+
+  // Find existing service by domain
+  let svc = SERVICES.find(s => s.domain === domain);
+
+  if (!svc) {
+    // Create a new service entry on the fly
+    svc = {
+      id: domain.replace(/\./g, '_'),
+      name,
+      category: 'Other',
+      domain,
+      bg: '#f5f5f5',
+      reward: reward || 'Referral bonus — see site for details',
+      url: 'https://' + domain,
+      codes: []
+    };
+    SERVICES.push(svc);
+    // Rebuild category filters to include 'Other' if new
+    buildFilters();
+  } else if (reward) {
+    // Update reward text if provided
+    svc.reward = reward;
+    if (name) svc.name = name;
+  }
+
+  const serviceId = svc.id;
+
+  // Update user's stored codes
+  const idx = userData.userCodes.findIndex(c => c.serviceId === serviceId);
+  if (idx >= 0) userData.userCodes[idx].code = code;
+  else userData.userCodes.push({ serviceId, code });
   saveUserData(userData);
 
-  const displayName = clerk.user.firstName || clerk.user.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'You';
-  const svc = SERVICES.find(s => s.id === serviceId);
-  svc.codes.push({ code, contributor: displayName + ' (you)', trees: userData.trees || 1 });
+  // Reflect in live SERVICES array
+  const existingIdx = svc.codes.findIndex(c => c.contributor?.endsWith('(you)'));
+  const entry = { code, contributor: displayName + ' (you)', trees: userData.trees || 1 };
+  if (existingIdx >= 0) svc.codes[existingIdx] = entry;
+  else svc.codes.push(entry);
 
-  document.getElementById('add-code-direct').value = '';
-  document.getElementById('add-code-service-select').value = '';
-  renderDashboardCodes();
-  renderServiceSelect();
   renderGrid();
-  showToast('Code added and live! 🎉');
+  renderDashboardCodes();
 }
 
 // ── INIT ──

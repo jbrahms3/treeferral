@@ -254,14 +254,20 @@
     </div>
 
     <div class="add-code-form">
-      <h3 style="font-size:1rem;font-weight:700;color:var(--green-900);margin-bottom:1rem">Add a referral code</h3>
+      <h3 style="font-size:1rem;font-weight:700;color:var(--green-900);margin-bottom:.3rem">Add a referral code</h3>
+      <p style="font-size:.85rem;color:var(--earth-600);margin-bottom:1rem">Works for any service — just enter the website</p>
       <form onsubmit="handleDashAddCode(event)">
         <div class="form-row">
           <div class="form-group">
-            <label>Service</label>
-            <select id="add-code-service-select">
-              <option value="">Choose a service…</option>
-            </select>
+            <label>Service website</label>
+            <div style="position:relative">
+              <input type="text" id="add-code-domain-input" placeholder="e.g. netflix.com"
+                     oninput="previewLogo(this.value)" autocomplete="off" />
+              <div id="domain-logo-preview" style="display:none;position:absolute;right:.6rem;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:6px;overflow:hidden;background:var(--earth-100);padding:3px">
+                <img id="domain-logo-img" src="" alt="" style="width:100%;height:100%;object-fit:contain" />
+              </div>
+            </div>
+            <div class="form-hint" id="domain-detected-name"></div>
           </div>
           <div class="form-group">
             <label>Your referral code</label>
@@ -335,21 +341,36 @@
   </div>
 </div>
 
-<!-- ADD CODE MODAL (from card) -->
+<!-- ADD CODE MODAL (free-form — any service) -->
 <div class="modal-overlay" id="add-code-modal">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('add-code-modal')">✕</button>
-    <h2>Add your code</h2>
-    <p class="modal-sub">Submit your <strong id="add-code-service-name"></strong> referral code</p>
+    <h2>Add a referral code</h2>
+    <p class="modal-sub">Works for any service — just paste the website</p>
     <form onsubmit="handleAddCode(event)">
+      <div class="form-group">
+        <label>Service website</label>
+        <div style="position:relative">
+          <input type="text" id="modal-domain-input" placeholder="e.g. netflix.com"
+                 oninput="previewModalLogo(this.value)" autocomplete="off" />
+          <div id="modal-logo-preview" style="display:none;position:absolute;right:.6rem;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:6px;overflow:hidden;background:var(--earth-100);padding:3px">
+            <img id="modal-logo-img" src="" alt="" style="width:100%;height:100%;object-fit:contain" />
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Service name</label>
+        <input type="text" id="modal-service-name" placeholder="e.g. Netflix" required
+               oninput="this.dataset.userEdited='1'" />
+      </div>
       <div class="form-group">
         <label>Your referral code</label>
         <input type="text" id="add-code-input" placeholder="e.g. MYCODE123" required />
         <div class="form-hint">Enter the code exactly as you'd share it with a friend</div>
       </div>
       <div class="form-group">
-        <label>Your referral link (optional)</label>
-        <input type="url" id="add-code-url" placeholder="https://..." />
+        <label>Reward description <span style="font-weight:400;color:var(--earth-400)">(optional)</span></label>
+        <input type="text" id="modal-reward" placeholder="e.g. 1 month free" />
       </div>
       <button type="submit" class="btn btn-primary w-full mt-2">Save &amp; put in rotation</button>
     </form>
