@@ -321,6 +321,31 @@ nav {
 .bsb-sub { font-size: .78rem; color: var(--earth-600); line-height: 1.4; }
 .bottom-strip-divider { width: 1px; height: 48px; background: var(--earth-200); flex-shrink: 0; }
 
+/* ── ABOUT / HERO COPY (below the codes) ── */
+.about-section { background: var(--earth-100); }
+.about-title { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 900; line-height: 1.2; color: var(--green-900); margin-bottom: 1rem; }
+.about-title span { color: var(--green-600); }
+.about-copy { font-size: 1.05rem; color: var(--earth-600); line-height: 1.6; max-width: 600px; margin: 0 auto 1.5rem; }
+.hero-badges { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
+.badge {
+  background: var(--white);
+  border: 1px solid var(--earth-200);
+  border-radius: 100px;
+  padding: .4rem 1rem;
+  font-size: .82rem;
+  color: var(--earth-700);
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+/* ── HOW IT WORKS ── */
+.how-section { background: var(--white); }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 2rem; margin-top: 2rem; }
+.step { text-align: center; }
+.step h3 { font-size: 1rem; font-weight: 700; margin: .75rem 0 .4rem; color: var(--green-900); }
+.step p { font-size: .88rem; color: var(--earth-600); line-height: 1.6; }
+
 /* ── FOOTER ── */
 footer {
   background: var(--green-900);
@@ -418,8 +443,8 @@ footer {
 .tree-animation { font-size: 1.8rem; display: flex; justify-content: center; gap: .3rem; margin: .75rem 0; }
 .pay-step.hidden { display: none; }
 
-/* ── STEP NUMS (for how modal) ── */
-.step-num { width: 36px; height: 36px; border-radius: 50%; background: var(--green-600); color: var(--white); font-size: 1rem; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+/* ── STEP NUMS ── */
+.step-num { width: 40px; height: 40px; border-radius: 50%; background: var(--green-600); color: var(--white); font-size: 1.05rem; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin: 0 auto; }
 
 /* ── TOAST ── */
 .toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--green-900); color: var(--white); padding: .65rem 1.4rem; border-radius: 100px; font-size: .88rem; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.25); transition: transform .3s ease; z-index: 999; white-space: nowrap; pointer-events: none; }

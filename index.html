@@ -91,6 +91,101 @@
     </div>
   </div>
 
+  <!-- ABOUT / HERO COPY (moved below the codes) -->
+  <section class="about-section">
+    <div class="container section text-center">
+      <h1 class="about-title">Share codes.<br><span>Plant trees.</span> Repeat.</h1>
+      <p class="about-copy">
+        TreeFerral rotates community referral codes for the apps you already use.
+        Your monthly subscription goes straight to planting real trees. 🌍
+      </p>
+      <div class="hero-badges">
+        <span class="badge">🌱 100% to reforestation</span>
+        <span class="badge">🔄 Auto-rotated codes</span>
+        <span class="badge">🎁 Real rewards</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how-section" id="how-it-works">
+    <div class="container section">
+      <h2 class="section-title text-center">How it works</h2>
+      <p class="section-sub text-center">Simple as planting a seed</p>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <h3>Join for a few bucks</h3>
+          <p>Pick a plan starting at $3/mo. Your subscription directly funds real tree-planting organizations.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <h3>Add your referral codes</h3>
+          <p>Submit the referral codes you have for any service — it only takes a minute.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <h3>Your code gets shown</h3>
+          <p>Visitors see your code randomly selected when they browse. Every copy is a potential referral bonus for you.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <h3>Trees get planted</h3>
+          <p>100% of subscription revenue goes to verified reforestation projects via Ecologi and One Tree Planted.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section id="pricing" style="background:var(--white)">
+    <div class="container section">
+      <h2 class="section-title text-center">Simple, transparent pricing</h2>
+      <p class="section-sub text-center">Every cent plants trees. Cancel anytime.</p>
+      <div class="pricing-cards" style="max-width:900px;margin:0 auto">
+        <div class="pricing-card">
+          <div class="plan-name">Sprout</div>
+          <div class="plan-price">$3<span>/mo</span></div>
+          <div class="plan-trees">🌳 1 tree planted per month</div>
+          <ul class="plan-features">
+            <li>1 referral code slot</li>
+            <li>All service listings</li>
+            <li>Random rotation</li>
+          </ul>
+          <button class="btn btn-outline w-full" style="color:var(--green-800);border-color:var(--green-600)"
+                  onclick="openSignupWithPlan('sprout')">Get started</button>
+        </div>
+        <div class="pricing-card popular">
+          <div class="popular-badge">🌿 Most popular</div>
+          <div class="plan-name">Grove</div>
+          <div class="plan-price">$7<span>/mo</span></div>
+          <div class="plan-trees">🌳🌳🌳 3 trees per month</div>
+          <ul class="plan-features">
+            <li>3 referral code slots</li>
+            <li>Priority rotation weight</li>
+            <li>Member badge</li>
+            <li>3 trees planted monthly</li>
+          </ul>
+          <button class="btn btn-primary w-full" onclick="openSignupWithPlan('grove')">Get started</button>
+        </div>
+        <div class="pricing-card">
+          <div class="plan-name">Forest</div>
+          <div class="plan-price">$15<span>/mo</span></div>
+          <div class="plan-trees">🌳×8 trees per month</div>
+          <ul class="plan-features">
+            <li>Unlimited code slots</li>
+            <li>Top rotation placement</li>
+            <li>8 trees planted monthly</li>
+            <li>Member badge</li>
+            <li>Early access to new services</li>
+          </ul>
+          <button class="btn btn-outline w-full" style="color:var(--green-800);border-color:var(--green-600)"
+                  onclick="openSignupWithPlan('forest')">Get started</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- FOOTER -->
   <footer>
     <div class="footer-inner">
@@ -98,8 +193,8 @@
         <span class="logo-icon">🌳</span> TreeFerral
       </div>
       <div class="footer-links">
-        <a href="#" onclick="openPricingModal()">Pricing</a>
-        <a href="#" onclick="openHowItWorksModal()">How it works</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#how-it-works">How it works</a>
         <a href="#">Privacy</a>
         <a href="#">Terms</a>
       </div>
@@ -272,81 +367,6 @@
       </div>
       <button type="submit" class="btn btn-primary w-full mt-2">Save &amp; put in rotation</button>
     </form>
-  </div>
-</div>
-
-<!-- HOW IT WORKS MODAL -->
-<div class="modal-overlay" id="how-modal">
-  <div class="modal">
-    <button class="modal-close" onclick="closeModal('how-modal')">✕</button>
-    <h2>How TreeFerral works</h2>
-    <p class="modal-sub">Simple as planting a seed</p>
-    <div style="display:flex;flex-direction:column;gap:1.2rem;margin-top:1rem">
-      <div style="display:flex;gap:1rem;align-items:flex-start">
-        <div class="step-num" style="flex-shrink:0">1</div>
-        <div><strong>Copy a free referral code</strong><p style="font-size:.88rem;color:var(--earth-600);margin-top:.25rem">Anyone can browse and copy codes — no account needed.</p></div>
-      </div>
-      <div style="display:flex;gap:1rem;align-items:flex-start">
-        <div class="step-num" style="flex-shrink:0">2</div>
-        <div><strong>Join to list your codes</strong><p style="font-size:.88rem;color:var(--earth-600);margin-top:.25rem">Pay $3–$15/mo to add your referral codes to the rotation.</p></div>
-      </div>
-      <div style="display:flex;gap:1rem;align-items:flex-start">
-        <div class="step-num" style="flex-shrink:0">3</div>
-        <div><strong>Your code gets shown to visitors</strong><p style="font-size:.88rem;color:var(--earth-600);margin-top:.25rem">Each visitor sees a random member's code — equal exposure for everyone.</p></div>
-      </div>
-      <div style="display:flex;gap:1rem;align-items:flex-start">
-        <div class="step-num" style="flex-shrink:0">4</div>
-        <div><strong>Every dollar plants trees</strong><p style="font-size:.88rem;color:var(--earth-600);margin-top:.25rem">100% of subscription revenue goes to verified reforestation via Ecologi &amp; One Tree Planted.</p></div>
-      </div>
-    </div>
-    <button class="btn btn-primary w-full mt-3" onclick="closeModal('how-modal');startJoin()">Join from $3/month →</button>
-  </div>
-</div>
-
-<!-- PRICING MODAL -->
-<div class="modal-overlay" id="pricing-modal">
-  <div class="modal" style="max-width:560px">
-    <button class="modal-close" onclick="closeModal('pricing-modal')">✕</button>
-    <h2>Simple pricing</h2>
-    <p class="modal-sub">Every cent plants trees. Cancel anytime.</p>
-    <div class="pricing-cards" style="margin-top:1.25rem">
-      <div class="pricing-card">
-        <div class="plan-name">Sprout</div>
-        <div class="plan-price">$3<span>/mo</span></div>
-        <div class="plan-trees">🌳 1 tree/month</div>
-        <ul class="plan-features">
-          <li>1 referral code slot</li>
-          <li>Random rotation</li>
-        </ul>
-        <button class="btn btn-outline w-full" style="color:var(--green-800);border-color:var(--green-600)"
-                onclick="closeModal('pricing-modal');openSignupWithPlan('sprout')">Get started</button>
-      </div>
-      <div class="pricing-card popular">
-        <div class="popular-badge">🌿 Popular</div>
-        <div class="plan-name">Grove</div>
-        <div class="plan-price">$7<span>/mo</span></div>
-        <div class="plan-trees">🌳🌳🌳 3 trees/month</div>
-        <ul class="plan-features">
-          <li>3 code slots</li>
-          <li>Priority rotation</li>
-          <li>Member badge</li>
-        </ul>
-        <button class="btn btn-primary w-full"
-                onclick="closeModal('pricing-modal');openSignupWithPlan('grove')">Get started</button>
-      </div>
-      <div class="pricing-card">
-        <div class="plan-name">Forest</div>
-        <div class="plan-price">$15<span>/mo</span></div>
-        <div class="plan-trees">🌳×8 trees/month</div>
-        <ul class="plan-features">
-          <li>Unlimited slots</li>
-          <li>Top placement</li>
-          <li>Early access</li>
-        </ul>
-        <button class="btn btn-outline w-full" style="color:var(--green-800);border-color:var(--green-600)"
-                onclick="closeModal('pricing-modal');openSignupWithPlan('forest')">Get started</button>
-      </div>
-    </div>
   </div>
 </div>
 

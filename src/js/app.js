@@ -251,9 +251,6 @@ function setFilter(cat, btn) {
   renderGrid();
 }
 
-// ── MODAL HELPERS ──
-function openPricingModal() { openModal('pricing-modal'); }
-function openHowItWorksModal() { openModal('how-modal'); }
 
 // ── NAV ──
 function updateNav() {
