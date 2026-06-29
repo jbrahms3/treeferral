@@ -410,25 +410,7 @@ function handleDashAddCode(e) {
 
 // ── INIT ──
 async function init() {
-  clerk = new window.Clerk(CLERK_KEY);
-  await clerk.load();
-
-  // React to auth state changes (sign in, sign out, sign up)
-  clerk.addListener(({ user }) => {
-    updateNav();
-    updateStats();
-    renderGrid();
-
-    if (user && pendingPaymentOpen) {
-      pendingPaymentOpen = false;
-      // Small delay so Clerk's modal closes first
-      setTimeout(openPaymentModal, 300);
-    }
-
-    // If user signed out while on dashboard, return to main page
-    if (!user) showDashboard(false);
-  });
-
+  // Render UI immediately — don't wait for Clerk
   buildFilters();
   renderGrid();
   updateStats();
@@ -443,7 +425,6 @@ async function init() {
       }
     });
   });
-
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       document.querySelectorAll('.modal-overlay.open').forEach(m => {
@@ -452,9 +433,31 @@ async function init() {
       });
     }
   });
-
-  // Rotate displayed codes every 30 seconds
   setInterval(renderGrid, 30000);
+
+  // Load Clerk — update UI once ready
+  try {
+    clerk = new window.Clerk(CLERK_KEY);
+    await clerk.load();
+
+    clerk.addListener(({ user }) => {
+      updateNav();
+      updateStats();
+      renderGrid();
+      if (user && pendingPaymentOpen) {
+        pendingPaymentOpen = false;
+        setTimeout(openPaymentModal, 300);
+      }
+      if (!user) showDashboard(false);
+    });
+
+    // Refresh UI now that Clerk knows auth state
+    updateNav();
+    updateStats();
+    renderGrid();
+  } catch (err) {
+    console.error('Clerk failed to load:', err);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
