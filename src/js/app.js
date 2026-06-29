@@ -181,10 +181,25 @@ function buildCard(svc) {
 
 function renderGrid() {
   const grid = document.getElementById('referral-grid');
-  grid.innerHTML = SERVICES
-    .filter(s => activeFilter === 'All' || s.category === activeFilter)
-    .map(buildCard)
-    .join('');
+  const noResults = document.getElementById('no-results');
+
+  const filtered = SERVICES.filter(s => {
+    if (activeFilter !== 'All' && s.category !== activeFilter) return false;
+    if (searchQuery && !s.name.toLowerCase().includes(searchQuery) && !s.domain?.includes(searchQuery)) return false;
+    return true;
+  });
+
+  grid.innerHTML = filtered.map(buildCard).join('');
+
+  if (noResults) {
+    if (filtered.length === 0) {
+      noResults.classList.remove('hidden');
+      const qEl = document.getElementById('no-results-query');
+      if (qEl) qEl.textContent = searchQuery || activeFilter;
+    } else {
+      noResults.classList.add('hidden');
+    }
+  }
 }
 
 // ── COPY ──
@@ -206,42 +221,58 @@ function copyCode(btn, code) {
   });
 }
 
+// ── SEARCH ──
+let searchQuery = '';
+
+function searchServices(query) {
+  searchQuery = query.trim().toLowerCase();
+  activeFilter = 'All';
+  document.querySelectorAll('.filter-btn').forEach(b =>
+    b.classList.toggle('active', b.textContent === 'All'));
+  renderGrid();
+}
+
 // ── FILTERS ──
 function buildFilters() {
+  const cats = ['All', ...new Set(SERVICES.map(s => s.category))];
   const container = document.getElementById('category-filters');
-  container.innerHTML = CATEGORIES.map(cat => `
+  container.innerHTML = cats.map(cat => `
     <button class="filter-btn ${cat === 'All' ? 'active' : ''}" onclick="setFilter('${cat}', this)">${cat}</button>
   `).join('');
 }
 
 function setFilter(cat, btn) {
   activeFilter = cat;
+  searchQuery = '';
+  const searchInput = document.getElementById('search-input');
+  if (searchInput) searchInput.value = '';
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderGrid();
 }
 
+// ── MODAL HELPERS ──
+function openPricingModal() { openModal('pricing-modal'); }
+function openHowItWorksModal() { openModal('how-modal'); }
+
 // ── NAV ──
 function updateNav() {
   const authEl = document.getElementById('nav-auth');
-  const dashLink = document.getElementById('nav-dashboard');
   const user = clerk?.user;
 
   if (user) {
     const userData = getUserData();
     const name = user.firstName || user.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'Member';
     authEl.innerHTML = `
-      <span style="color:var(--green-400);font-size:.85rem">🌳 ${userData?.trees || 0} trees</span>
-      <span style="color:var(--green-100);font-size:.85rem;font-weight:600">${name}</span>
-      <button class="btn btn-outline btn-sm" onclick="clerk.signOut()">Sign out</button>
+      <span style="color:var(--green-400);font-size:.82rem;font-weight:600">🌳 ${userData?.trees || 0}</span>
+      <a href="#" style="color:var(--green-100)" onclick="showDashboard(true)">${name}</a>
+      <button class="btn btn-outline btn-sm" style="color:var(--green-100);border-color:rgba(255,255,255,.3)" onclick="clerk.signOut()">Sign out</button>
     `;
-    dashLink.style.display = 'block';
   } else {
     authEl.innerHTML = `
-      <button class="btn btn-outline btn-sm" onclick="clerk.openSignIn()">Sign in</button>
-      <button class="btn btn-primary btn-sm" onclick="startJoin()">Join for free</button>
+      <button class="btn btn-outline btn-sm" style="color:var(--green-100);border-color:rgba(255,255,255,.3)" onclick="clerk.openSignIn()">Sign in</button>
+      <button class="btn btn-primary btn-sm" onclick="startJoin()">Join $3/mo</button>
     `;
-    dashLink.style.display = 'none';
   }
 }
 
