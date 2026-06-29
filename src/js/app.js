@@ -437,7 +437,7 @@ async function init() {
 
   // Load Clerk — update UI once ready
   try {
-    clerk = new window.Clerk(CLERK_KEY);
+    clerk = window.Clerk;
     await clerk.load();
 
     clerk.addListener(({ user }) => {
