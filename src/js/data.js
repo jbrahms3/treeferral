@@ -1,14 +1,14 @@
-// ── SERVICES CATALOGUE ──
-// Each service has a list of referral codes supplied by paying members.
-// On page load, one code per service is randomly selected to display.
+const LOGO_DEV_KEY = 'pk_DfNn3uPKQ4mLB6sTzS_wGg';
+function logoUrl(domain) {
+  return `https://img.logo.dev/${domain}?token=${LOGO_DEV_KEY}&size=64`;
+}
 
 const SERVICES = [
   {
     id: "robinhood",
     name: "Robinhood",
     category: "Finance",
-    icon: "🐦",
-    color: "#00c805",
+    domain: "robinhood.com",
     bg: "#e6fff0",
     reward: "Get a free stock (up to $225) when you sign up",
     url: "https://robinhood.com",
@@ -18,8 +18,7 @@ const SERVICES = [
     id: "coinbase",
     name: "Coinbase",
     category: "Crypto",
-    icon: "₿",
-    color: "#1652f0",
+    domain: "coinbase.com",
     bg: "#eef2ff",
     reward: "$10 in Bitcoin when you buy or sell $100+",
     url: "https://coinbase.com",
@@ -29,8 +28,7 @@ const SERVICES = [
     id: "doordash",
     name: "DoorDash",
     category: "Food Delivery",
-    icon: "🍕",
-    color: "#ff3008",
+    domain: "doordash.com",
     bg: "#fff1f0",
     reward: "50% off your first 3 orders (up to $15 each)",
     url: "https://doordash.com",
@@ -40,8 +38,7 @@ const SERVICES = [
     id: "uber",
     name: "Uber",
     category: "Rides",
-    icon: "🚗",
-    color: "#000000",
+    domain: "uber.com",
     bg: "#f5f5f5",
     reward: "$20 off your first 2 rides",
     url: "https://uber.com",
@@ -51,8 +48,7 @@ const SERVICES = [
     id: "airbnb",
     name: "Airbnb",
     category: "Travel",
-    icon: "🏡",
-    color: "#ff385c",
+    domain: "airbnb.com",
     bg: "#fff1f3",
     reward: "$50 off your first booking of $150+",
     url: "https://airbnb.com",
@@ -62,8 +58,7 @@ const SERVICES = [
     id: "chime",
     name: "Chime",
     category: "Finance",
-    icon: "💳",
-    color: "#1da462",
+    domain: "chime.com",
     bg: "#f0fdf4",
     reward: "$100 bonus when you set up direct deposit",
     url: "https://chime.com",
@@ -73,8 +68,7 @@ const SERVICES = [
     id: "rakuten",
     name: "Rakuten",
     category: "Shopping",
-    icon: "🛍️",
-    color: "#bf0000",
+    domain: "rakuten.com",
     bg: "#fff5f5",
     reward: "$30 cash back on your first $30+ purchase",
     url: "https://rakuten.com",
@@ -84,8 +78,7 @@ const SERVICES = [
     id: "hinge",
     name: "Hinge",
     category: "Dating",
-    icon: "💕",
-    color: "#e8175d",
+    domain: "hinge.co",
     bg: "#fff0f6",
     reward: "1 month of Hinge+ free",
     url: "https://hinge.co",
@@ -95,8 +88,7 @@ const SERVICES = [
     id: "sofi",
     name: "SoFi",
     category: "Finance",
-    icon: "🏦",
-    color: "#7b4eea",
+    domain: "sofi.com",
     bg: "#f5f0ff",
     reward: "Up to $325 bonus when you open an account",
     url: "https://sofi.com",
@@ -106,8 +98,7 @@ const SERVICES = [
     id: "acorns",
     name: "Acorns",
     category: "Investing",
-    icon: "🌰",
-    color: "#4caf50",
+    domain: "acorns.com",
     bg: "#f0fdf4",
     reward: "$5 bonus when you start investing",
     url: "https://acorns.com",
@@ -117,8 +108,7 @@ const SERVICES = [
     id: "expensify",
     name: "Expensify",
     category: "Business",
-    icon: "🧾",
-    color: "#0185ff",
+    domain: "expensify.com",
     bg: "#eff8ff",
     reward: "3 months free on any paid plan",
     url: "https://expensify.com",
@@ -128,8 +118,7 @@ const SERVICES = [
     id: "honey",
     name: "Honey",
     category: "Shopping",
-    icon: "🍯",
-    color: "#e8a900",
+    domain: "joinhoney.com",
     bg: "#fffbeb",
     reward: "500 bonus Honey Gold on first order",
     url: "https://joinhoney.com",
@@ -137,7 +126,6 @@ const SERVICES = [
   },
 ];
 
-// ── DEMO MEMBERS (simulates existing paid members) ──
 const DEMO_MEMBERS = [
   { name: "Alex T.", trees: 12, joined: "Jan 2024", codes: {
     robinhood: "ALEX-RF-9821", doordash: "ALEX50OFF", airbnb: "ALEXTRAVEL22",
@@ -161,7 +149,6 @@ const DEMO_MEMBERS = [
   }},
 ];
 
-// Populate service codes from demo members
 DEMO_MEMBERS.forEach(member => {
   Object.entries(member.codes).forEach(([serviceId, code]) => {
     const svc = SERVICES.find(s => s.id === serviceId);
@@ -170,9 +157,9 @@ DEMO_MEMBERS.forEach(member => {
 });
 
 const PLANS = [
-  { id: "sprout",   name: "Sprout",  price: 3,  trees: 1, perks: ["1 referral code slot", "All service listings", "Monthly tree planted"] },
-  { id: "grove",    name: "Grove",   price: 7,  trees: 3, perks: ["3 referral code slots", "Priority rotation", "3 trees planted monthly", "Member badge"] },
-  { id: "forest",   name: "Forest",  price: 15, trees: 8, perks: ["Unlimited code slots", "Top rotation placement", "8 trees planted monthly", "Member badge", "Early access to new services"] },
+  { id: "sprout",  name: "Sprout", price: 3,  trees: 1, perks: ["1 referral code slot", "All service listings", "Monthly tree planted"] },
+  { id: "grove",   name: "Grove",  price: 7,  trees: 3, perks: ["3 referral code slots", "Priority rotation", "3 trees planted monthly", "Member badge"] },
+  { id: "forest",  name: "Forest", price: 15, trees: 8, perks: ["Unlimited code slots", "Top rotation placement", "8 trees planted monthly", "Member badge", "Early access"] },
 ];
 
 const CATEGORIES = ["All", ...new Set(SERVICES.map(s => s.category))];

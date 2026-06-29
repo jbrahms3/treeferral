@@ -71,11 +71,15 @@ function buildCard(svc) {
     }
   }
 
+  const iconHtml = `<img src="${logoUrl(svc.domain)}" alt="${svc.name}" class="service-logo"
+    onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+    <span class="service-logo-fallback" style="display:none">${svc.name.slice(0,2).toUpperCase()}</span>`;
+
   if (codes.length === 0) {
     return `
       <div class="referral-card" data-category="${svc.category}">
         <div class="card-header">
-          <div class="service-icon" style="background:${svc.bg};color:${svc.color}">${svc.icon}</div>
+          <div class="service-icon" style="background:${svc.bg}">${iconHtml}</div>
           <div class="card-meta">
             <h3>${svc.name}</h3>
             <div class="category">${svc.category}</div>
@@ -100,7 +104,7 @@ function buildCard(svc) {
   return `
     <div class="referral-card" data-category="${svc.category}">
       <div class="card-header">
-        <div class="service-icon" style="background:${svc.bg};color:${svc.color}">${svc.icon}</div>
+        <div class="service-icon" style="background:${svc.bg}">${iconHtml}</div>
         <div class="card-meta">
           <h3>${svc.name}</h3>
           <div class="category">${svc.category}</div>
