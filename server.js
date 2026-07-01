@@ -234,7 +234,7 @@ async function start() {
   } catch (err) {
     console.error('DB schema error:', err.message);
   }
-  app.listen(PORT, () => console.log(`TreeFerral running on :${PORT}`));
+  app.listen(PORT, () => console.log(`Treeferral running on :${PORT}`));
 }
 
 start();
