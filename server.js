@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const { Pool } = require('pg');
-const { createClerkClient } = require('@clerk/backend');
+const { createClerkClient, verifyToken } = require('@clerk/backend');
 const fs = require('fs');
 const path = require('path');
 
@@ -21,13 +21,17 @@ app.use(express.static(path.join(__dirname)));
 // ── AUTH MIDDLEWARE ──
 async function requireAuth(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  if (!token) {
+    console.error('requireAuth: no token in Authorization header');
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   try {
-    const payload = await clerkClient.verifyToken(token);
+    const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
     req.userId = payload.sub;
     next();
-  } catch {
-    res.status(401).json({ error: 'Invalid token' });
+  } catch (err) {
+    console.error('requireAuth: verifyToken failed:', err.message);
+    res.status(401).json({ error: 'Invalid token', detail: err.message });
   }
 }
 
