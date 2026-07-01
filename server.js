@@ -23,9 +23,9 @@ const stripe = process.env.STRIPE_SECRET_KEY
   : null;
 
 const PLAN_CONFIGS = [
-  { id: 'sprout', name: 'Sprout', price: 3,  trees: 1 },
-  { id: 'grove',  name: 'Grove',  price: 7,  trees: 3 },
-  { id: 'forest', name: 'Forest', price: 15, trees: 8 },
+  { id: 'sprout', name: 'Sprout', price: 3, trees: 1 },
+  { id: 'grove',  name: 'Grove',  price: 5, trees: 3 },
+  { id: 'forest', name: 'Forest', price: 9, trees: 8 },
 ];
 
 // ── STRIPE WEBHOOK (raw body — must be registered before express.json()) ──
@@ -318,35 +318,55 @@ app.get('*', (req, res) => {
 });
 
 // ── STRIPE PRICE SETUP ──
-// Creates Treeferral products + recurring prices in Stripe if they don't exist yet.
+// Creates or updates Stripe products + prices to match PLAN_CONFIGS.
+// Safe to re-run: detects price changes and archives stale Stripe prices.
 async function syncStripePlans() {
   if (!stripe) {
     console.warn('⚠️  STRIPE_SECRET_KEY not set — payment features disabled');
     return;
   }
   for (const plan of PLAN_CONFIGS) {
-    const { rows: [existing] } = await pool.query(
-      'SELECT stripe_price_id FROM plans WHERE id = $1', [plan.id]
+    const { rows: [row] } = await pool.query(
+      'SELECT stripe_price_id, stripe_product_id FROM plans WHERE id = $1', [plan.id]
     );
-    if (existing?.stripe_price_id) continue;
 
-    const product = await stripe.products.create({
-      name: `Treeferral ${plan.name}`,
-      metadata: { plan_id: plan.id },
-    });
-    const price = await stripe.prices.create({
-      product: product.id,
-      unit_amount: plan.price * 100,
-      currency: 'usd',
-      recurring: { interval: 'month' },
-      metadata: { plan_id: plan.id },
-    });
+    const expectedAmount = plan.price * 100;
+    let productId = row?.stripe_product_id;
+    let needNewPrice = !row?.stripe_price_id;
 
-    await pool.query(
-      'UPDATE plans SET stripe_price_id = $1, stripe_product_id = $2 WHERE id = $3',
-      [price.id, product.id, plan.id]
-    );
-    console.log(`Stripe plan created: ${plan.name} → ${price.id}`);
+    if (row?.stripe_price_id && !needNewPrice) {
+      try {
+        const existing = await stripe.prices.retrieve(row.stripe_price_id);
+        if (existing.active && existing.unit_amount === expectedAmount) continue;
+        // Price changed — archive the old one
+        await stripe.prices.update(row.stripe_price_id, { active: false });
+        needNewPrice = true;
+      } catch {
+        needNewPrice = true;
+      }
+    }
+
+    if (needNewPrice) {
+      if (!productId) {
+        const product = await stripe.products.create({
+          name: `Treeferral ${plan.name}`,
+          metadata: { plan_id: plan.id },
+        });
+        productId = product.id;
+      }
+      const price = await stripe.prices.create({
+        product: productId,
+        unit_amount: expectedAmount,
+        currency: 'usd',
+        recurring: { interval: 'month' },
+        metadata: { plan_id: plan.id },
+      });
+      await pool.query(
+        'UPDATE plans SET stripe_price_id = $1, stripe_product_id = $2 WHERE id = $3',
+        [price.id, productId, plan.id]
+      );
+      console.log(`Stripe plan synced: ${plan.name} → ${price.id} ($${plan.price}/mo)`);
+    }
   }
 }
 

@@ -5,7 +5,7 @@ function logoUrl(domain) {
 }
 
 const PLANS = [
-  { id: 'sprout', name: 'Sprout', price: 3,  trees: 1, perks: ['1 referral code slot', 'All service listings', 'Monthly tree planted'] },
-  { id: 'grove',  name: 'Grove',  price: 7,  trees: 3, perks: ['3 referral code slots', 'Priority rotation weight', '3 trees planted monthly', 'Member badge'] },
-  { id: 'forest', name: 'Forest', price: 15, trees: 8, perks: ['Unlimited code slots', 'Top rotation placement', '8 trees planted monthly', 'Member badge', 'Early access'] },
+  { id: 'sprout', name: 'Sprout', price: 3, trees: 1, slots: 2,         perks: ['2 referral code slots', 'All service listings', '1 tree planted monthly'] },
+  { id: 'grove',  name: 'Grove',  price: 5, trees: 3, slots: 5,         perks: ['5 referral code slots', 'Priority rotation weight', '3 trees planted monthly', 'Member badge'] },
+  { id: 'forest', name: 'Forest', price: 9, trees: 8, slots: Infinity,  perks: ['Unlimited code slots', 'Top rotation placement', '8 trees planted monthly', 'Member badge', 'Early access'] },
 ];
