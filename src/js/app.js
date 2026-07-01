@@ -399,9 +399,20 @@ async function handleAddCode(e) {
 
   if (!domain || !name || !code) { showToast('Please fill in the website, name, and code'); return; }
 
-  await addCodeForService({ domain, name, code, reward, serviceId: addCodeModalServiceId });
-  closeModal('add-code-modal');
-  showToast("Code saved — it's now live! 🎉");
+  const btn = e.submitter || e.target.querySelector('[type=submit]');
+  const origText = btn?.textContent;
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
+
+  try {
+    await addCodeForService({ domain, name, code, reward, serviceId: addCodeModalServiceId });
+    closeModal('add-code-modal');
+    showToast("Code saved — it's now live! 🎉");
+  } catch (err) {
+    console.error('handleAddCode:', err);
+    showToast('Failed to save — check your connection and try again');
+  } finally {
+    if (btn) { btn.textContent = origText; btn.disabled = false; }
+  }
 }
 
 // ── DASHBOARD ──
@@ -478,31 +489,37 @@ async function handleDashAddCode(e) {
 
   if (!domain || !code) { showToast('Enter a website and a referral code'); return; }
 
-  await addCodeForService({ domain, name: nameFromDomain(domain), code, reward: '' });
+  const btn = e.submitter || e.target.querySelector('[type=submit]');
+  const origText = btn?.textContent;
+  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
 
-  document.getElementById('add-code-domain-input').value = '';
-  document.getElementById('add-code-direct').value = '';
-  document.getElementById('domain-logo-preview').style.display = 'none';
-  document.getElementById('domain-detected-name').textContent = '';
-  showToast('Code added and live! 🎉');
+  try {
+    await addCodeForService({ domain, name: nameFromDomain(domain), code, reward: '' });
+    document.getElementById('add-code-domain-input').value = '';
+    document.getElementById('add-code-direct').value = '';
+    document.getElementById('domain-logo-preview').style.display = 'none';
+    document.getElementById('domain-detected-name').textContent = '';
+    showToast('Code added and live! 🎉');
+  } catch (err) {
+    console.error('handleDashAddCode:', err);
+    showToast('Failed to save — check your connection and try again');
+  } finally {
+    if (btn) { btn.textContent = origText; btn.disabled = false; }
+  }
 }
 
 // ── SHARED: upsert a code via API ──
+// Throws on failure — callers are responsible for error handling.
 async function addCodeForService({ domain, name, code, reward, serviceId }) {
-  try {
-    const headers = await authHeaders();
-    await apiFetch('/api/user/codes', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ domain, name, code, reward, serviceId }),
-    });
-    await Promise.all([loadUser(), loadServices()]);
-    renderDashboard();
-    updateStats();
-  } catch (err) {
-    console.error('addCodeForService:', err);
-    showToast('Failed to save code — please try again');
-  }
+  const headers = await authHeaders();
+  await apiFetch('/api/user/codes', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ domain, name, code, reward, serviceId }),
+  });
+  await Promise.all([loadUser(), loadServices()]);
+  renderDashboard();
+  updateStats();
 }
 
 // ── INIT ──
