@@ -8,12 +8,77 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+const APP_URL = process.env.APP_URL
+  || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://localhost:${PORT}`);
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
 
 const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? require('stripe')(process.env.STRIPE_SECRET_KEY)
+  : null;
+
+const PLAN_CONFIGS = [
+  { id: 'sprout', name: 'Sprout', price: 3,  trees: 1 },
+  { id: 'grove',  name: 'Grove',  price: 7,  trees: 3 },
+  { id: 'forest', name: 'Forest', price: 15, trees: 8 },
+];
+
+// ── STRIPE WEBHOOK (raw body — must be registered before express.json()) ──
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripe) return res.status(400).json({ error: 'Stripe not configured' });
+
+  const sig = req.headers['stripe-signature'];
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('Webhook signature failed:', err.message);
+    return res.status(400).send(`Webhook error: ${err.message}`);
+  }
+
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        if (session.mode !== 'subscription') break;
+        const userId = session.client_reference_id;
+        const planId = session.metadata?.plan_id;
+        const plan = PLAN_CONFIGS.find(p => p.id === planId);
+        if (!userId || !plan) {
+          console.error('Webhook: missing userId or plan', { userId, planId });
+          break;
+        }
+        await pool.query(
+          `UPDATE users
+           SET plan = $1, stripe_customer_id = $2, stripe_subscription_id = $3, trees = trees + $4
+           WHERE clerk_user_id = $5`,
+          [planId, session.customer, session.subscription, plan.trees, userId]
+        );
+        console.log(`Subscription activated: ${userId} → ${planId}`);
+        break;
+      }
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object;
+        await pool.query(
+          'UPDATE users SET plan = NULL, stripe_subscription_id = NULL WHERE stripe_subscription_id = $1',
+          [sub.id]
+        );
+        console.log('Subscription cancelled:', sub.id);
+        break;
+      }
+    }
+  } catch (err) {
+    console.error('Webhook handler error:', err);
+    return res.status(500).json({ error: 'Webhook processing failed' });
+  }
+
+  res.json({ received: true });
+});
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
@@ -36,7 +101,6 @@ async function requireAuth(req, res, next) {
 }
 
 // ── GET /api/services ──
-// Returns all services, each with one randomly-selected active code
 app.get('/api/services', async (req, res) => {
   try {
     const { rows: services } = await pool.query('SELECT * FROM services ORDER BY name');
@@ -95,7 +159,8 @@ app.get('/api/stats', async (req, res) => {
 app.get('/api/user', requireAuth, async (req, res) => {
   try {
     let { rows: [user] } = await pool.query(
-      'SELECT * FROM users WHERE clerk_user_id = $1', [req.userId]
+      'SELECT id, clerk_user_id, name, plan, trees, joined_at FROM users WHERE clerk_user_id = $1',
+      [req.userId]
     );
 
     if (!user) {
@@ -108,7 +173,8 @@ app.get('/api/user', requireAuth, async (req, res) => {
         [req.userId, name]
       );
       ({ rows: [user] } = await pool.query(
-        'SELECT * FROM users WHERE clerk_user_id = $1', [req.userId]
+        'SELECT id, clerk_user_id, name, plan, trees, joined_at FROM users WHERE clerk_user_id = $1',
+        [req.userId]
       ));
     }
 
@@ -128,13 +194,11 @@ app.get('/api/user', requireAuth, async (req, res) => {
 });
 
 // ── POST /api/user/codes ──
-// Add or update a code. Creates the service if it doesn't exist.
 app.post('/api/user/codes', requireAuth, async (req, res) => {
   const { domain, name, code, reward, serviceId: knownId } = req.body;
   if (!code) return res.status(400).json({ error: 'code is required' });
 
   try {
-    // Ensure user row exists
     const clerkUser = await clerkClient.users.getUser(req.userId);
     const userName = clerkUser.firstName
       || clerkUser.emailAddresses?.[0]?.emailAddress?.split('@')[0]
@@ -164,15 +228,8 @@ app.post('/api/user/codes', requireAuth, async (req, res) => {
         await pool.query(
           `INSERT INTO services (id, name, category, domain, bg, reward, url)
            VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING`,
-          [
-            serviceId,
-            name || domain,
-            'Other',
-            domain,
-            '#f5f5f5',
-            reward || 'Referral bonus — see site for details',
-            'https://' + domain,
-          ]
+          [serviceId, name || domain, 'Other', domain, '#f5f5f5',
+           reward || 'Referral bonus — see site for details', 'https://' + domain]
         );
       }
     }
@@ -205,19 +262,50 @@ app.delete('/api/user/codes/:serviceId', requireAuth, async (req, res) => {
   }
 });
 
-// ── POST /api/user/plan ──
-app.post('/api/user/plan', requireAuth, async (req, res) => {
-  const { plan, trees } = req.body;
-  if (!plan) return res.status(400).json({ error: 'plan required' });
+// ── POST /api/checkout ──
+// Creates a Stripe Checkout Session and returns the redirect URL
+app.post('/api/checkout', requireAuth, async (req, res) => {
+  if (!stripe) return res.status(503).json({ error: 'Payments not configured' });
+
+  const { planId } = req.body;
+  const plan = PLAN_CONFIGS.find(p => p.id === planId);
+  if (!plan) return res.status(400).json({ error: 'Invalid plan' });
+
   try {
+    // Ensure user row exists
+    const clerkUser = await clerkClient.users.getUser(req.userId);
+    const name = clerkUser.firstName
+      || clerkUser.emailAddresses?.[0]?.emailAddress?.split('@')[0]
+      || 'Member';
+    const email = clerkUser.emailAddresses?.[0]?.emailAddress;
     await pool.query(
-      'UPDATE users SET plan = $1, trees = trees + $2 WHERE clerk_user_id = $3',
-      [plan, trees || 0, req.userId]
+      'INSERT INTO users (clerk_user_id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [req.userId, name]
     );
-    res.json({ ok: true });
+
+    // Get the Stripe price ID for this plan
+    const { rows: [planRow] } = await pool.query(
+      'SELECT stripe_price_id FROM plans WHERE id = $1', [planId]
+    );
+    if (!planRow?.stripe_price_id) {
+      return res.status(503).json({ error: 'Plan not yet configured in Stripe' });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [{ price: planRow.stripe_price_id, quantity: 1 }],
+      client_reference_id: req.userId,
+      customer_email: email,
+      metadata: { plan_id: planId },
+      success_url: `${APP_URL}/?checkout=success`,
+      cancel_url: `${APP_URL}/#pricing`,
+    });
+
+    res.json({ url: session.url });
   } catch (err) {
-    console.error('POST /api/user/plan', err);
-    res.status(500).json({ error: 'DB error' });
+    console.error('POST /api/checkout', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -229,21 +317,54 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// ── STRIPE PRICE SETUP ──
+// Creates Treeferral products + recurring prices in Stripe if they don't exist yet.
+async function syncStripePlans() {
+  if (!stripe) {
+    console.warn('⚠️  STRIPE_SECRET_KEY not set — payment features disabled');
+    return;
+  }
+  for (const plan of PLAN_CONFIGS) {
+    const { rows: [existing] } = await pool.query(
+      'SELECT stripe_price_id FROM plans WHERE id = $1', [plan.id]
+    );
+    if (existing?.stripe_price_id) continue;
+
+    const product = await stripe.products.create({
+      name: `Treeferral ${plan.name}`,
+      metadata: { plan_id: plan.id },
+    });
+    const price = await stripe.prices.create({
+      product: product.id,
+      unit_amount: plan.price * 100,
+      currency: 'usd',
+      recurring: { interval: 'month' },
+      metadata: { plan_id: plan.id },
+    });
+
+    await pool.query(
+      'UPDATE plans SET stripe_price_id = $1, stripe_product_id = $2 WHERE id = $3',
+      [price.id, product.id, plan.id]
+    );
+    console.log(`Stripe plan created: ${plan.name} → ${price.id}`);
+  }
+}
+
 // ── START ──
 async function start() {
-  if (!process.env.CLERK_SECRET_KEY) {
-    console.error('⚠️  CLERK_SECRET_KEY is not set — all authenticated routes will return 401');
-  }
-  if (!process.env.DATABASE_URL) {
-    console.error('⚠️  DATABASE_URL is not set — all DB calls will fail');
-  }
+  if (!process.env.CLERK_SECRET_KEY) console.error('⚠️  CLERK_SECRET_KEY not set');
+  if (!process.env.DATABASE_URL)     console.error('⚠️  DATABASE_URL not set');
+  if (!process.env.STRIPE_SECRET_KEY) console.warn('⚠️  STRIPE_SECRET_KEY not set — payments disabled');
+
   try {
     const schema = fs.readFileSync(path.join(__dirname, 'db', 'schema.sql'), 'utf8');
     await pool.query(schema);
     console.log('DB schema ready');
+    await syncStripePlans();
   } catch (err) {
-    console.error('DB schema error:', err.message);
+    console.error('Startup error:', err.message);
   }
+
   app.listen(PORT, () => console.log(`Treeferral running on :${PORT}`));
 }
 

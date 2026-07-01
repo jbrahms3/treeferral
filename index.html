@@ -294,32 +294,15 @@
   <div class="modal">
     <button class="modal-close" onclick="closeModal('payment-modal');goToPayStep(1)">✕</button>
     <div class="pay-step" id="pay-step-1">
-      <h2>💳 Choose your plan</h2>
+      <h2>🌳 Choose your plan</h2>
       <p class="modal-sub">Your subscription plants real trees every month</p>
       <div class="plan-select-grid" id="plan-select-grid"></div>
-      <form onsubmit="handlePayment(event)">
-        <div class="stripe-mock">
-          <div class="stripe-header"><span>🔒</span><span>Secure payment · powered by Stripe</span></div>
-          <div class="form-group">
-            <label>Card number</label>
-            <input type="text" placeholder="4242 4242 4242 4242" maxlength="19"
-                   oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/(.{4})/g,'$1 ').trim()" />
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Expiry</label>
-              <input type="text" placeholder="MM / YY" maxlength="7"
-                     oninput="let v=this.value.replace(/\D/g,'');this.value=v.length>2?v.slice(0,2)+' / '+v.slice(2):v" />
-            </div>
-            <div class="form-group">
-              <label>CVC</label>
-              <input type="text" placeholder="123" maxlength="4" />
-            </div>
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary w-full" id="pay-btn">Complete &amp; Start Planting</button>
-        <p class="form-hint text-center mt-1">Cancel anytime · No hidden fees</p>
-      </form>
+      <button class="btn btn-primary w-full" id="pay-btn" onclick="handlePayment()">
+        Continue to payment →
+      </button>
+      <p class="form-hint text-center mt-1">
+        🔒 Secure checkout via Stripe · Cancel anytime · No hidden fees
+      </p>
     </div>
     <div class="pay-step hidden" id="pay-step-2">
       <div class="success-screen">

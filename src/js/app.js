@@ -325,29 +325,25 @@ function selectPlan(id, el) {
 }
 
 // ── PAYMENT ──
-async function handlePayment(e) {
-  e.preventDefault();
+async function handlePayment() {
   const plan = PLANS.find(p => p.id === selectedPlan);
   const btn = document.getElementById('pay-btn');
-  btn.textContent = 'Processing…';
+  const origText = btn.textContent;
+  btn.textContent = 'Redirecting to Stripe…';
   btn.disabled = true;
 
   try {
     const headers = await authHeaders();
-    await apiFetch('/api/user/plan', {
+    const { url } = await apiFetch('/api/checkout', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ plan: plan.id, trees: plan.trees }),
+      body: JSON.stringify({ planId: plan.id }),
     });
-    await loadUser();
-    goToPayStep(2);
-    updateNav();
-    updateStats();
+    window.location.href = url;
   } catch (err) {
     console.error('handlePayment:', err);
-    showToast('Something went wrong — please try again');
-  } finally {
-    btn.textContent = `Complete & Start Planting — $${plan.price}/mo`;
+    showToast('Could not start checkout — please try again');
+    btn.textContent = origText;
     btn.disabled = false;
   }
 }
@@ -527,6 +523,33 @@ async function init() {
   updateNav();
   loadServices();
   updateStats();
+
+  // Handle return from Stripe Checkout
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('checkout') === 'success') {
+    window.history.replaceState({}, '', '/');
+    // Wait for Clerk auth + user data, then show success
+    const showSuccess = () => {
+      loadUser().then(() => {
+        updateNav();
+        updateStats();
+        goToPayStep(2);
+        openModal('payment-modal');
+      });
+    };
+    // Stripe webhook may take a moment — poll until plan is set
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      await loadUser();
+      if (currentUser?.plan || ++attempts >= 8) {
+        clearInterval(poll);
+        updateNav();
+        updateStats();
+        goToPayStep(2);
+        openModal('payment-modal');
+      }
+    }, 1500);
+  }
 
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', e => {
