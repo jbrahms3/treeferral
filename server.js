@@ -227,6 +227,12 @@ app.get('*', (req, res) => {
 
 // ── START ──
 async function start() {
+  if (!process.env.CLERK_SECRET_KEY) {
+    console.error('⚠️  CLERK_SECRET_KEY is not set — all authenticated routes will return 401');
+  }
+  if (!process.env.DATABASE_URL) {
+    console.error('⚠️  DATABASE_URL is not set — all DB calls will fail');
+  }
   try {
     const schema = fs.readFileSync(path.join(__dirname, 'db', 'schema.sql'), 'utf8');
     await pool.query(schema);
